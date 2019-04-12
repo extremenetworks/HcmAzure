@@ -2,10 +2,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: hcm-gcp
+  name: hcm-azure
   namespace: default
   labels:
-    app: hcm-gcp
+    app: hcm-azure
 spec:
   ports:
     - name: tcp-web
@@ -13,26 +13,26 @@ spec:
       protocol: TCP
       targetPort: 80
   selector:
-    app: hcm-gcp
+    app: hcm-azure
   type: ClusterIP
 ---
 # Deployment
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
-  name: hcm-gcp
+  name: hcm-azure
   namespace: default
   labels:
-    app: hcm-gcp
+    app: hcm-azure
 spec:
   template:
     metadata:
       labels:
-        app: hcm-gcp
+        app: hcm-azure
     spec:
       containers:
-        - name: hcm-gcp
-          image: kurts/ng_hcm_gcp_mgr
+        - name: hcm-azure
+          image: kurts/ng_hcm_azure_mgr
       imagePullSecrets:
         - name: regcred
 ---

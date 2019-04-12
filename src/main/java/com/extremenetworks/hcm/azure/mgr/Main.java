@@ -1,4 +1,4 @@
-package com.extremenetworks.hcm.gcp.mgr;
+package com.extremenetworks.hcm.azure.mgr;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -22,10 +22,10 @@ public class Main {
         ctx.setContextPath("/");
         server.setHandler(ctx);
 
-        ServletHolder serHol = ctx.addServlet(ServletContainer.class, "/gcp/*");
+        ServletHolder serHol = ctx.addServlet(ServletContainer.class, "/azure/*");
         serHol.setInitOrder(1);
         serHol.setInitParameter("jersey.config.server.provider.packages", 
-                "com.extremenetworks.hcm.gcp.mgr");
+                "com.extremenetworks.hcm.azure.mgr");
 
         try {
             server.start();

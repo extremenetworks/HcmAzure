@@ -4,14 +4,14 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.extremenetworks.ng.hybridcloud</groupId>
-	<artifactId>gcp</artifactId>
+	<artifactId>azure</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 <!-- 	<packaging>war</packaging> -->
 	<packaging>jar</packaging>
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<failOnMissingWebXml>false</failOnMissingWebXml>
-		<google.version>1.28.0</google.version>
+		<azure.version>1.21.0</azure.version>
 		<jackson.version>2.9.8</jackson.version>
 		<slf4j.version>1.7.26</slf4j.version>
 		<jetty.version>9.4.15.v20190215</jetty.version>
@@ -19,7 +19,7 @@
 	</properties>
 	<build>
 		<sourceDirectory>src/main/java</sourceDirectory>
-		<finalName>NgHcmGcpMgr</finalName>
+		<finalName>NgHcmAzureMgr</finalName>
 		<plugins>
 			<plugin>
 				<artifactId>maven-compiler-plugin</artifactId>
@@ -82,24 +82,24 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>com.google.http-client</groupId>
-			<artifactId>google-http-client-jackson2</artifactId>
-			<version>${google.version}</version>
+		    <groupId>com.microsoft.azure</groupId>
+		    <artifactId>azure</artifactId>
+		    <version>${azure.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>com.google.http-client</groupId>
-			<artifactId>google-http-client</artifactId>
-			<version>${google.version}</version>
+			<groupId>com.microsoft.azure</groupId>
+			<artifactId>azure-mgmt-network</artifactId>
+			<version>${azure.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>com.google.api-client</groupId>
-			<artifactId>google-api-client</artifactId>
-			<version>${google.version}</version>
+			<groupId>com.microsoft.azure</groupId>
+			<artifactId>azure-mgmt-resources</artifactId>
+			<version>${azure.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>com.google.apis</groupId>
-			<artifactId>google-api-services-compute</artifactId>
-			<version>v1-rev210-1.25.0</version>
+			<groupId>com.microsoft.azure</groupId>
+			<artifactId>azure-mgmt-compute</artifactId>
+			<version>${azure.version}</version>
 		</dependency>
 
 		<dependency>

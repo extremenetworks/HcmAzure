@@ -12,9 +12,9 @@ if ($LastExitCode -ne 0) {
 }
 
 # Build and push the Docker container
-docker.exe build -q -t kurts/ng_hcm_gcp_mgr .
+docker.exe build -q -t kurts/ng_hcm_azure_mgr .
 docker.exe login -ukurts -pXS7Z8pEy
-docker.exe push kurts/ng_hcm_gcp_mgr:latest
+docker.exe push kurts/ng_hcm_azure_mgr:latest
 
 # Re-create the deployment on GKE
 kubectl.exe apply -f .\kube_deploy.yaml

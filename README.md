@@ -1,1 +1,1 @@
-# Hybrid Cloud Manager - Google Compute Platform
+# Hybrid Cloud Manager - Microsoft Azure

@@ -1,4 +1,4 @@
-package com.extremenetworks.hcm.gcp.mgr;
+package com.extremenetworks.hcm.azure.mgr;
 
 import java.io.ByteArrayOutputStream;
 import java.sql.DriverManager;
@@ -29,7 +29,7 @@ public class ResourceRes {
 	private static ObjectMapper jsonMapper = new ObjectMapper();
 	private static final JsonFactory jsonFactory = new JsonFactory();
 	
-	private final static String RABBIT_QUEUE_NAME = "gcp.resources";
+	private final static String RABBIT_QUEUE_NAME = "azure.resources";
 	private static Channel rabbitChannel;
 
 	private final String dbConnString = "jdbc:mysql://hcm-mysql:3306/Resources?useSSL=false";
@@ -83,70 +83,29 @@ public class ResourceRes {
      */
     @POST
     @Path("triggerUpdate")
-    @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public String triggerUpdateAllResources(
-    		String authFileContent,
-    		@QueryParam("projectId") String projectId) {
+    		@QueryParam("appId") String appId,
+    		@QueryParam("key") String key,
+    		@QueryParam("tenantId") String tenantId,
+    		@QueryParam("subscription") String subscription) {
 
     	try {
-    		if (projectId == null || projectId.isEmpty()) {
+    		if (	appId == null || appId.isEmpty() ||
+    				key == null || key.isEmpty() ||
+    				tenantId == null || tenantId.isEmpty() ||
+    				subscription == null || subscription.isEmpty()) {
     			
-    			String msg = "The projectId query parameter is not provided - not triggering an update!";
+    			String msg = "The appId, key, tenantId and/or subscription query parameters are not provided - not triggering an update!";
     			logger.warn(msg);
     			return jsonMapper.writeValueAsString(new ResourcesWebResponse(1, msg));
     		}
     			
-    			
-    		
-
     		/* Config and start the background worker */
-    		logger.debug("Creating background worker to import data from GPC project " + projectId);
+    		logger.debug("Creating background worker to import data from Azure app id " + appId);
 
-    		
-    		
-    		
-//    		GoogleComputeEngineManager computeManager = new GoogleComputeEngineManager();
-//    		
-//    		String projectId = "analytics-research-199618";
-//    		// TODO: if the file name will always the same, get rid of this parameter
-//    		String authenticationFileName = "googleAuth.json";
-//    		
-//    		logger.debug("Starting to import data from GCE for project with ID " + projectId + " using auth file " + authenticationFileName);
-//    		
-//    		boolean connected = computeManager.createComputeConnection(projectId, authenticationFileName);
-//    		
-//    		if (!connected) {
-//    			logger.warn("Won't be able to retrieve any data from Google Compute Engine since no authentication/authorization/connection could be established");
-//    			return "Won't be able to retrieve any data from Google Compute Engine since no authentication/authorization/connection could be established";
-//    		}
-//    		
-//    		/* Import zones */
-//    		ZoneList allZones = computeManager.retrieveAllZones(projectId, "");
-//    		if (allZones == null || allZones.getItems() == null) {
-//    			logger.error("Won't be able to retrieve any instance data from Google Compute Engine since no zones could be retrieved");
-//    			return "Won't be able to retrieve any instance data from Google Compute Engine since no zones could be retrieved";
-//    		}
-//
-//    		String result;
-//    		
-//    		try {
-//    			result = jsonMapper.writeValueAsString(allZones.getItems());
-//
-//    			logger.debug("Starting background worker");
-//    			executor.execute(new ResourcesWorker(projectId, authenticationFileName, RABBIT_QUEUE_NAME, rabbitChannel));
-//    	        
-//    		} catch (Exception ex) {
-//    			logger.error(ex);
-//    			return "Error converting result list to JSON string";
-//    		}
-    		
-    		
-    		
-    		
-    		
     		executor.execute(new ResourcesWorker(
-    				projectId, authFileContent, RABBIT_QUEUE_NAME, rabbitChannel));
+    				appId, key, tenantId, subscription, RABBIT_QUEUE_NAME, rabbitChannel));
             
             return jsonMapper.writeValueAsString(
             		new ResourcesWebResponse(0, "Successfully triggered an update of all resource data"));
@@ -179,15 +138,15 @@ public class ResourceRes {
      * @param projectId
      * @return
      */
-    private String retrieveDataFromDb(String projectId) {
+    private String retrieveDataFromDb(String appId) {
     	 
-        logger.debug("Retrieving all resource data for GCP project " + projectId + " from the DB");
+        logger.debug("Retrieving all resource data for Azure app id " + appId + " from the DB");
         
         try {
         	java.sql.Connection con = DriverManager.getConnection(dbConnString, dbUser, dbPassword);
 
         	// Query the DB for all resource data for the given account ID
-        	String query = "SELECT lastUpdated, resourceType, resourceData FROM gcp WHERE projectId = '" + projectId + "'";
+        	String query = "SELECT lastUpdated, resourceType, resourceData FROM gcp WHERE appId = '" + appId + "'";
 
             Statement st = con.createStatement();
             ResultSet rs = st.executeQuery(query);
@@ -204,8 +163,8 @@ public class ResourceRes {
             jsonGen.writeStartObject();
             
             jsonGen.writeStringField("dataType", "resources");
-            jsonGen.writeStringField("sourceSystemType", "gcp");
-            jsonGen.writeStringField("sourceSystemProjectId", projectId);
+            jsonGen.writeStringField("sourceSystemType", "azure");
+            jsonGen.writeStringField("sourceSystemAppId", appId);
             		
             /* The "data" field will contain an array of objects. Each object will contain all data on a particular
              * resource type

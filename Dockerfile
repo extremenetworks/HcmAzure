@@ -7,10 +7,10 @@ RUN mkdir /dependency-jars
 ADD target/dependency-jars /dependency-jars
 
 # Copy the app
-ADD target/NgHcmGcpMgr.jar /
+ADD target/NgHcmAzureMgr.jar /
 
 # When started, the conatiner will start the Java app
-CMD ["java", "-jar", "NgHcmGcpMgr.jar"]
+CMD ["java", "-jar", "NgHcmAzureMgr.jar"]
 
 #FROM payara/micro
 
