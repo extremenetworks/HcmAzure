@@ -39,7 +39,7 @@
 						<manifest>
 							<addClasspath>true</addClasspath>
 							<classpathPrefix>dependency-jars/</classpathPrefix>
-							<mainClass>com.extremenetworks.hcm.gcp.mgr.Main</mainClass>
+							<mainClass>com.extremenetworks.hcm.azure.mgr.Main</mainClass>
 						</manifest>
 					</archive>
 				</configuration>
@@ -74,7 +74,7 @@
 				<!-- targetPath>${project.build.directory}</targetPath -->
 				<includes>
 					<include>log4j2.properties</include>
-<!-- 					<include>googleAuth.json</include> -->
+					<include>azureJavaKeyStore</include>
 				</includes>
 			</resource>
 		</resources>

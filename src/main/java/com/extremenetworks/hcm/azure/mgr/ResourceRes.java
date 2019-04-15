@@ -61,9 +61,9 @@ public class ResourceRes {
     @GET
     @Path("all")
     public String retrieveAllResources(
-    		@QueryParam("projectId") String projectId) {
+    		@QueryParam("appId") String appId) {
     	
-    	String dbResourceData = retrieveDataFromDb(projectId);
+    	String dbResourceData = retrieveDataFromDb(appId);
         
         return dbResourceData;
     }
@@ -146,7 +146,7 @@ public class ResourceRes {
         	java.sql.Connection con = DriverManager.getConnection(dbConnString, dbUser, dbPassword);
 
         	// Query the DB for all resource data for the given account ID
-        	String query = "SELECT lastUpdated, resourceType, resourceData FROM gcp WHERE appId = '" + appId + "'";
+        	String query = "SELECT lastUpdated, resourceType, resourceData FROM azure WHERE appId = '" + appId + "'";
 
             Statement st = con.createStatement();
             ResultSet rs = st.executeQuery(query);
@@ -154,7 +154,7 @@ public class ResourceRes {
             /* Start building the JSON string which contains some meta data. Example:
           
 			    "dataType": "resources",
-			    "sourceSystemType": "gcp",
+			    "sourceSystemType": "azure",
 			    "sourceSystemProjectId": "418454969983",
              */
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();

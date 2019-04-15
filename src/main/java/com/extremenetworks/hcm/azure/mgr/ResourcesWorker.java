@@ -37,8 +37,6 @@ public class ResourcesWorker implements Runnable {
 	private String key;
 	private String tenantId;
 	private String subscription;
-	
-	private String authenticationFileName;
 
 	// Rabbit MQ config
 	private String RABBIT_QUEUE_NAME;
@@ -143,16 +141,18 @@ public class ResourcesWorker implements Runnable {
 	
 		try {
 			String sqlInsertStmtSubnets = 
-				"INSERT INTO gcp (lastUpdated, projectId, resourceType, resourceData) "
-				+ "VALUES (NOW(), ?, ?, ?) "
+				"INSERT INTO azure (lastUpdated, appId, tenantId, subscription, resourceType, resourceData) "
+				+ "VALUES (NOW(), ?, ?, ?, ?, ?) "
 				+ "ON DUPLICATE KEY UPDATE lastUpdated=NOW(), resourceData=?";
 				
 			PreparedStatement prepInsertStmtSubnets = dbConn.prepareStatement(sqlInsertStmtSubnets);
 	        
 			prepInsertStmtSubnets.setString(1, appId);
-			prepInsertStmtSubnets.setString(2, resourceType);
-			prepInsertStmtSubnets.setString(3, jsonMapper.writeValueAsString(data));
-			prepInsertStmtSubnets.setString(4, jsonMapper.writeValueAsString(data));
+			prepInsertStmtSubnets.setString(2, tenantId);
+			prepInsertStmtSubnets.setString(3, subscription);
+			prepInsertStmtSubnets.setString(4, resourceType);
+			prepInsertStmtSubnets.setString(5, jsonMapper.writeValueAsString(data));
+			prepInsertStmtSubnets.setString(6, jsonMapper.writeValueAsString(data));
 			
 			prepInsertStmtSubnets.executeUpdate();
 			return true;
