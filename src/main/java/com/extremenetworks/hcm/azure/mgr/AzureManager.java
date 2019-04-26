@@ -118,7 +118,7 @@ public class AzureManager {
 //		        .withSubscription(subscription);
 	
 		
-		OkHttpClient.Builder httpClientBuilder = buildAzureRestClient(10000, 10000, "");
+		OkHttpClient.Builder httpClientBuilder = buildAzureRestClient(10000, 10000);
 		
 		retrofit2.Retrofit.Builder retrofitBuilder = new retrofit2.Retrofit.Builder();
 		retrofitBuilder.baseUrl("https://management.azure.com");
@@ -161,9 +161,9 @@ public class AzureManager {
 	 * @param connectionTimeout	Timeout in milliseconds to wait for a result on any API request towards any AWS server
 	 * @return	True in case of success, False in case of any error.
 	 */
-	private OkHttpClient.Builder buildAzureRestClient(int socketTimeout, int connectionTimeout, String logPrefix) {
+	private OkHttpClient.Builder buildAzureRestClient(int socketTimeout, int connectionTimeout) {
 
-		logPrefix += "\t";
+		
 		
 		try {
 			/* Load the keyStore file.
@@ -177,7 +177,7 @@ public class AzureManager {
 			// InputStream awskeyStoreStream = new FileInputStream(awsKeyStorePath);
 						
 			if (azureKeyStoreStream == null) {
-				logger.error(logPrefix + "Couldn't find custom Azure Java trust store file: azureJavaKeyStore - won't be able to communicate with the Azure cloud!");
+				logger.error("Couldn't find custom Azure Java trust store file: azureJavaKeyStore - won't be able to communicate with the Azure cloud!");
 				return null;
 			}
 			
@@ -208,11 +208,11 @@ public class AzureManager {
 			if (trustManager.getAcceptedIssuers() != null && trustManager.getAcceptedIssuers().length > 0) {
 				
 				for (X509Certificate issuer : trustManager.getAcceptedIssuers()) {
-					logger.debug(logPrefix + "TrustManager accepted issuer: DN: " + issuer.getIssuerDN()+ ", subject DN: " + issuer.getSubjectDN());
+					logger.debug("TrustManager accepted issuer: DN: " + issuer.getIssuerDN()+ ", subject DN: " + issuer.getSubjectDN());
 				}
 				
 			} else {
-				logger.debug(logPrefix + "TrustManager has no accepted issuers");
+				logger.debug("TrustManager has no accepted issuers");
 			}
 			
 			
@@ -223,27 +223,26 @@ public class AzureManager {
 			return httpClientBuilder;
 			
 		} catch (Exception ex) {		
-			logger.error(logPrefix + "Error building the Java trust store and SSL socket factory", ex);
+			logger.error("Error building the Java trust store and SSL socket factory", ex);
 			return null;
 		}
 	}
 	
 
-
 	/** Returns the list of all existing "managed" security groups from the given Azure account. Uses a special tag ("ExtremePolicyId")
 	 * as a filter on each security group to limit the result to only those groups that are synchronized by Connect.
 	 * @param	resourceGroupName	Optional. If provided, the method will return only managed security groups from the given resource group
 	 */
-	public HashMap<String, NetworkSecurityGroup> retrieveManagedSecurityGroups(String accountName, String resourceGroupName, String logPrefix) {
+	public HashMap<String, NetworkSecurityGroup> retrieveManagedSecurityGroups(String accountName, String resourceGroupName) {
 
 		Azure azureConnection = azureConnections.get(accountName);
 		if (azureConnection == null) {
-			logger.warn(logPrefix + "Cannot retrieve the managed security groups since there is no Azure connection for account " + accountName);
+			logger.warn("Cannot retrieve the managed security groups since there is no Azure connection for account " + accountName);
 			return null;
 		}
 		
-		logger.debug(logPrefix + "Trying to retrieve managed security groups from Azure account " + accountName); // + " - ignoring regions: " +  awsConnection.getRegionsToIgnore());
-		logPrefix += "\t";
+		logger.debug("Trying to retrieve managed security groups from Azure account " + accountName); // + " - ignoring regions: " +  awsConnection.getRegionsToIgnore());
+		
 		
 		HashMap<String, NetworkSecurityGroup> secGroups = new HashMap<String, NetworkSecurityGroup>();
 		
@@ -261,30 +260,81 @@ public class AzureManager {
 					if (resourceGroupName != null && !resourceGroupName.isEmpty()) {
 						
 						if (secGroup.resourceGroupName().equalsIgnoreCase(resourceGroupName)) {
-							logger.debug(logPrefix + "Retrieved next managed sec group that is also part of resource group " + resourceGroupName 
+							logger.debug("Retrieved next managed sec group that is also part of resource group " + resourceGroupName 
 								+ ": " + jsonMapper.writeValueAsString(secGroup));
 							secGroups.put(secGroup.id(), secGroup);	
 						} else {
-							logger.debug(logPrefix + "Retrieved next managed sec group " + secGroup.name() + " but it is not part of resource group " 
+							logger.debug("Retrieved next managed sec group " + secGroup.name() + " but it is not part of resource group " 
 								+ resourceGroupName + " (" + secGroup.resourceGroupName() + ") - ignoring");
 						}
 						
 					} else {
-						logger.debug(logPrefix + "Retrieved next managed sec group " + jsonMapper.writeValueAsString(secGroup));
+						logger.debug("Retrieved next managed sec group " + jsonMapper.writeValueAsString(secGroup));
 						secGroups.put(secGroup.id(), secGroup);	
 					}
 					
 				} else {
-					logger.debug(logPrefix + "Retrieved unmanaged sec group " + secGroup.name() + " - ignoring");
+					logger.debug("Retrieved unmanaged sec group " + secGroup.name() + " - ignoring");
 				}
 			}	
 			
-			logger.debug(logPrefix + "Found a total of " + countTotalGroups + " security groups from account " + accountName
+			logger.debug("Found a total of " + countTotalGroups + " security groups from account " + accountName
 				+ " out of which " + secGroups.size() + " managed groups got imported");
 			return secGroups;
 			
 		} catch (Exception ex) {
-			logger.error(logPrefix + "Error retrieving security groups from account " + accountName, ex);
+			logger.error("Error retrieving security groups from account " + accountName, ex);
+			return null;
+		}
+	}
+	
+
+	/** Returns the list of all existing "security groups from the given Azure account. 
+	 * @param	resourceGroupName	Optional. If provided, the method will return only security groups from the given resource group
+	 */
+	public List<Object> retrieveSecurityGroups(String accountName, String resourceGroupName) {
+
+		Azure azureConnection = azureConnections.get(accountName);
+		if (azureConnection == null) {
+			logger.warn("Cannot retrieve the security groups since there is no Azure connection for account " + accountName);
+			return null;
+		}
+		
+		logger.debug("Trying to retrieve security groups from Azure account " + accountName); // + " - ignoring regions: " +  awsConnection.getRegionsToIgnore());
+		
+		List<Object> secGroups = new ArrayList<Object>();
+		
+		try {
+			int countTotalGroups = 0;
+			PagedList<NetworkSecurityGroup> securityGroups = azureConnection.networkSecurityGroups().list();
+			
+			for (NetworkSecurityGroup secGroup: securityGroups) {
+				
+				countTotalGroups++;
+			
+				if (resourceGroupName != null && !resourceGroupName.isEmpty()) {
+					
+					if (secGroup.resourceGroupName().equalsIgnoreCase(resourceGroupName)) {
+						logger.debug("Retrieved next sec group that is also part of resource group " + resourceGroupName 
+							+ ": " + jsonMapper.writeValueAsString(secGroup));
+						secGroups.add(secGroup);	
+					} else {
+						logger.debug("Retrieved next sec group " + secGroup.name() + " but it is not part of resource group " 
+							+ resourceGroupName + " (" + secGroup.resourceGroupName() + ") - ignoring");
+					}
+					
+				} else {
+					logger.debug("Retrieved next sec group " + jsonMapper.writeValueAsString(secGroup));
+					secGroups.add(secGroup);	
+				}
+			}	
+			
+			logger.debug("Found a total of " + countTotalGroups + " security groups from account " + accountName
+				+ " out of which " + secGroups.size() + " groups got imported");
+			return secGroups;
+			
+		} catch (Exception ex) {
+			logger.error("Error retrieving security groups from account " + accountName, ex);
 			return null;
 		}
 	}
@@ -294,7 +344,7 @@ public class AzureManager {
 	 * @param	groupId	The id of the security group to retrieve. Will be used as the only filter for the request
 	 * @return	The Azure security group matching the provided security group id or null
 	 */
-	public NetworkSecurityGroup retrieveSecurityGroup(String accountName, String groupId, String logPrefix) {
+	public NetworkSecurityGroup retrieveSecurityGroup(String accountName, String groupId) {
 
 		if (groupId == null || groupId.isEmpty()) {
 			return null;
@@ -302,22 +352,22 @@ public class AzureManager {
 		
 		Azure azureConnection = azureConnections.get(accountName);
 		if (azureConnection == null) {
-			logger.warn(logPrefix + "Cannot retrieve the security group with id " + groupId + " since there is no Azure connection for account " + accountName);
+			logger.warn("Cannot retrieve the security group with id " + groupId + " since there is no Azure connection for account " + accountName);
 			return null;
 		}
 		
-		logger.debug(logPrefix + "Trying to retrieve security group with id " + groupId + " from account " + accountName);
-		logPrefix += "\t";
+		logger.debug("Trying to retrieve security group with id " + groupId + " from account " + accountName);
+		
 	
 		try {
 			NetworkSecurityGroup securityGroup = azureConnection.networkSecurityGroups().getById(groupId);
         	
-            logger.debug(logPrefix + "Successfully retrieved security group with id " + groupId + " (account " + accountName + "): " + 
+            logger.debug("Successfully retrieved security group with id " + groupId + " (account " + accountName + "): " + 
             		jsonMapper.writeValueAsString(securityGroup));
             return securityGroup;
             
 		} catch (Exception ex) {
-			logger.error(logPrefix + "Error retrieving security group with id " + groupId + " from account " + accountName + ": ", ex);
+			logger.error("Error retrieving security group with id " + groupId + " from account " + accountName + ": ", ex);
 			return null;
 		}
 	}
@@ -331,33 +381,31 @@ public class AzureManager {
 	 * network interface uses a lower-case resource group. To quickly find the corresponding VM within the cache all code should use the
 	 * lower-case version of the id. 
 	 */
-	public HashMap<String, VirtualMachine> retrieveVMs(String accountName, String logPrefix) {
+	public List<Object> retrieveVMs(String accountName) {
 
 		if (accountName == null || accountName.isEmpty()) {
-			logger.warn(logPrefix + "Cannot retrieve virtual machines since the given account name or security group id is empty");
+			logger.warn("Cannot retrieve virtual machines since the given account name or security group id is empty");
 			return null;
 		}
 		
 		Azure azureConnection = azureConnections.get(accountName);
 		if (azureConnection == null) {
-			logger.warn(logPrefix + "Cannot retrieve virtual machines since there is no Azure connection for account " + accountName);
+			logger.warn("Cannot retrieve virtual machines since there is no Azure connection for account " + accountName);
 			return null;
 		}
 
-		HashMap<String, VirtualMachine> allInstances = new HashMap<String, VirtualMachine>();		
+		List<Object> allInstances = new ArrayList<Object>();		
 	
 		try {
 			PagedList<VirtualMachine> vmList = azureConnection.virtualMachines().list();
 			
-			for (VirtualMachine vm: vmList) {
-				allInstances.put(vm.id().toLowerCase(), vm);
-			}	
+			allInstances.addAll(vmList);
 			
-			logger.debug(logPrefix + "Successfully retrieved " + allInstances.size() + " from account " + accountName);
+			logger.debug("Successfully retrieved " + allInstances.size() + " from account " + accountName);
 			return allInstances;
 			
 		} catch (Exception ex) {
-			logger.error(logPrefix + "Error retrieving instances from account " + accountName, ex);
+			logger.error("Error retrieving instances from account " + accountName, ex);
 			return null;
 		}
 	}
@@ -366,33 +414,33 @@ public class AzureManager {
 	/** Retrieves all network interfaces from all VMs.
 	 * @return	The full list of all network interfaces. HashMap key: nic ID
 	 */
-	public HashMap<String, NetworkInterface> retrieveNetworkInterfaces(String accountName, String logPrefix) {
+	public List<Object> retrieveNetworkInterfaces(String accountName) {
 
 		if (accountName == null || accountName.isEmpty()) {
-			logger.warn(logPrefix + "Cannot network interfaces since the given account name is empty");
+			logger.warn("Cannot network interfaces since the given account name is empty");
 			return null;
 		}
 		
 		Azure azureConnection = azureConnections.get(accountName);
 		if (azureConnection == null) {
-			logger.warn(logPrefix + "Cannot retrieve network interfaces since there is no Azure connection for account " + accountName);
+			logger.warn("Cannot retrieve network interfaces since there is no Azure connection for account " + accountName);
 			return null;
 		}
 
-		HashMap<String, NetworkInterface> allNICs = new HashMap<String, NetworkInterface>();		
+		List<Object> allNICs = new ArrayList<Object>();		
 	
 		try {
 			PagedList<NetworkInterface> nicList = azureConnection.networkInterfaces().list();
 			
 			for (NetworkInterface nic: nicList) {
-				allNICs.put(nic.id(), nic);
+				allNICs.add(nic);
 			}	
 			
-			logger.debug(logPrefix + "Successfully retrieved " + allNICs.size() + " network interfaces from account " + accountName);
+			logger.debug("Successfully retrieved " + allNICs.size() + " network interfaces from account " + accountName);
 			return allNICs;
 			
 		} catch (Exception ex) {
-			logger.error(logPrefix + "Error retrieving network interfaces from account " + accountName, ex);
+			logger.error("Error retrieving network interfaces from account " + accountName, ex);
 			return null;
 		}
 	}
@@ -401,21 +449,21 @@ public class AzureManager {
 	/** Retrieves all networks from the given account.
 	 * The HashMap's key is the network id in lower-case
 	 */
-	public List<Object> retrieveNetworks(String accountName, String logPrefix) {
+	public List<Object> retrieveNetworks(String accountName) {
 
 		if (accountName == null || accountName.isEmpty()) {
-			logger.warn(logPrefix + "Cannot retrieve networks since the given account name is empty");
+			logger.warn("Cannot retrieve networks since the given account name is empty");
 			return null;
 		}
 		
 		Azure azureConnection = azureConnections.get(accountName);
 		if (azureConnection == null) {
-			logger.warn(logPrefix + "Cannot retrieve networks since there is no Azure connection for account " + accountName);
+			logger.warn("Cannot retrieve networks since there is no Azure connection for account " + accountName);
 			return null;
 		}
 		
-		logger.debug(logPrefix + "Trying to retrieve all networks from Azure account " + accountName);
-		logPrefix += "\t";
+		logger.debug("Trying to retrieve all networks from Azure account " + accountName);
+		
 		
 		List<Object> allNetworks = new ArrayList<Object>();
 			
@@ -424,11 +472,11 @@ public class AzureManager {
 			
 			allNetworks.addAll(networkList);
 			
-			logger.debug(logPrefix + "Retrieved all " + allNetworks.size() + " networks from account " + accountName);
+			logger.debug("Retrieved all " + allNetworks.size() + " networks from account " + accountName);
 			return allNetworks;
 			
 		} catch (Exception ex) {
-			logger.error(logPrefix + "Error retrieving networks from account " + accountName, ex);
+			logger.error("Error retrieving networks from account " + accountName, ex);
 			return null;
 		}
 	}
@@ -441,39 +489,39 @@ public class AzureManager {
 	 * @param secGroup		The security group to assign to the instance interface. If null is provided, any associated security group
 	 * 						will be removed from that interface
 	 */
-	public boolean assignSecurityGroupToNwInterface(String accountName, NetworkInterface nwIf, NetworkSecurityGroup secGroup, String logPrefix) {
+	public boolean assignSecurityGroupToNwInterface(String accountName, NetworkInterface nwIf, NetworkSecurityGroup secGroup) {
 
 		if (accountName == null || accountName.isEmpty()) {
-			logger.warn(logPrefix + "Cannot assign a security group to a network interface since the given account name is empty");
+			logger.warn("Cannot assign a security group to a network interface since the given account name is empty");
 			return false;
 		}
 		if (nwIf == null) {
-			logger.warn(logPrefix + "Cannot assign a security group to a network interface since there is no network interface provided for " + accountName);
+			logger.warn("Cannot assign a security group to a network interface since there is no network interface provided for " + accountName);
 			return false;
 		}
 		
 		Azure azureConnection = azureConnections.get(accountName);
 		if (azureConnection == null) {
-			logger.warn(logPrefix + "Cannot assign a security group to a network interface since there is no Azure connection for account " + accountName);
+			logger.warn("Cannot assign a security group to a network interface since there is no Azure connection for account " + accountName);
 			return false;
 		}
 		
 		try {
 			NetworkInterface updatedNwIf = null;
 			if (secGroup == null) {
-				logger.info(logPrefix + "Removing security group from VM " + nwIf.virtualMachineId() + " and interface " + nwIf.id());
+				logger.info("Removing security group from VM " + nwIf.virtualMachineId() + " and interface " + nwIf.id());
 				updatedNwIf = nwIf.update().withoutNetworkSecurityGroup().apply();	
 			} else {
-				logger.info(logPrefix + "Assigning security group " + secGroup.name() + " to VM " + nwIf.virtualMachineId() + " on interface " + nwIf.id());
+				logger.info("Assigning security group " + secGroup.name() + " to VM " + nwIf.virtualMachineId() + " on interface " + nwIf.id());
 				updatedNwIf = nwIf.update().withExistingNetworkSecurityGroup(secGroup).apply();	
 			}
 			
-			logger.info(logPrefix + "Successfully modified instance interface " + nwIf.id() + " from VM " + nwIf.virtualMachineId() 
+			logger.info("Successfully modified instance interface " + nwIf.id() + " from VM " + nwIf.virtualMachineId() 
 				+ " on account " + accountName + ": " + jsonMapper.writeValueAsString(updatedNwIf));
 			return true;
 			
 		} catch (Exception ex) {
-			logger.error(logPrefix + "Error when trying to assign or remove the security group for VM " + nwIf.virtualMachineId() + 
+			logger.error("Error when trying to assign or remove the security group for VM " + nwIf.virtualMachineId() + 
 				" and interface " + nwIf.id() + " on account " + accountName, ex);
 			return false;
 		}
