@@ -3,7 +3,9 @@ package com.extremenetworks.hcm.azure.mgr;
 import java.io.ByteArrayOutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map.Entry;
 
 import com.extremenetworks.hcm.azure.tools.NetworkInterfaceJsonSerializer;
 import com.extremenetworks.hcm.azure.tools.NetworkJsonSerializer;
@@ -24,6 +26,8 @@ import com.microsoft.azure.management.compute.VirtualMachine;
 import com.microsoft.azure.management.network.Network;
 import com.microsoft.azure.management.network.NetworkInterface;
 import com.microsoft.azure.management.network.NetworkSecurityGroup;
+import com.microsoft.azure.management.network.NetworkSecurityRule;
+import com.microsoft.azure.management.network.Subnet;
 import com.rabbitmq.client.Channel;
 
 import org.apache.logging.log4j.LogManager;
@@ -51,6 +55,7 @@ public class ResourcesWorker implements Runnable {
 	// GCP Datastore
 	private Datastore datastore;
 	private final String DS_ENTITY_KIND_AZURE_RESOURCES = "AZURE_Resources";
+	private final String SRC_SYS_TYPE = "AZURE";
 
 	// Helpers / Utilities
 	private static final JsonFactory jsonFactory = new JsonFactory();
@@ -220,6 +225,9 @@ public class ResourcesWorker implements Runnable {
 	private boolean publishToRabbitMQ(RESOURCE_TYPES resourceType, List<Object> data) {
 
 		try {
+			Date now = new Date();
+			String lastUpdate = dateFormatter.format(now);
+
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 			JsonGenerator jsonGen = jsonFactory.createGenerator(outputStream, JsonEncoding.UTF8);
 
@@ -230,8 +238,6 @@ public class ResourcesWorker implements Runnable {
 			jsonGen.writeStringField("sourceSystemProjectId", appId);
 
 			jsonGen.writeArrayFieldStart("data");
-
-			Date now = new Date();
 
 			jsonGen.writeStartObject();
 
@@ -262,4 +268,160 @@ public class ResourcesWorker implements Runnable {
 		}
 
 	}
+
+	private void generateJsonForNetworks(JsonGenerator jsonGen, List<Network> networks, String lastUpdate) {
+
+		try {
+			for (Network network : networks) {
+
+				jsonGen.writeStartObject();
+
+				jsonGen.writeStringField("name", network.name());
+				jsonGen.writeStringField("srcSysType", SRC_SYS_TYPE);
+				jsonGen.writeStringField("resourceType", RESOURCE_TYPES.Network.name());
+				jsonGen.writeStringField("id", network.id());
+				jsonGen.writeStringField("lastUpdate", lastUpdate);
+
+				/*
+				 * Details
+				 */
+				jsonGen.writeArrayFieldStart("details");
+				jsonGen.writeString("Region: " + network.regionName());
+				jsonGen.writeString("Resource Group: " + network.resourceGroupName());
+
+				// Tags
+				if (network.tags() != null && !network.tags().isEmpty()) {
+					String tags = "";
+					Iterator<Entry<String, String>> itTags = network.tags().entrySet().iterator();
+
+					while (itTags.hasNext()) {
+						Entry<String, String> tag = itTags.next();
+						tags += tag.getKey() + " --> " + tag.getValue() + ", ";
+					}
+
+					tags = tags.substring(0, tags.length() - 2);
+					jsonGen.writeString("Tags: " + tags);
+				}
+
+				// Subnets
+				if (network.subnets() != null && !network.subnets().isEmpty()) {
+
+					jsonGen.writeString("Subnets");
+
+					Iterator<Subnet> itSubnets = network.subnets().values().iterator();
+					while (itSubnets.hasNext()) {
+
+						Subnet subnet = itSubnets.next();
+
+						String subnetDetails = "Name: " + subnet.name() + ", Address: " + subnet.addressPrefix()
+								+ ", IP Count: " + subnet.networkInterfaceIPConfigurationCount();
+						if (subnet.networkSecurityGroupId() != null) {
+							subnetDetails += ", Security Group: " + subnet.networkSecurityGroupId();
+						}
+
+						jsonGen.writeString(subnetDetails);
+					}
+				}
+
+				// End the "details" array
+				jsonGen.writeEndArray();
+
+				// End the current network node
+				jsonGen.writeEndObject();
+			}
+
+		} catch (Exception ex) {
+			logger.error("Error generating JSON content for list of networks", ex);
+		}
+	}
+
+	private void generateJsonForSecGroups(JsonGenerator jsonGen, List<NetworkSecurityGroup> secGroups,
+			String lastUpdate) {
+
+		try {
+			for (NetworkSecurityGroup secGroup : secGroups) {
+
+				jsonGen.writeStartObject();
+
+				jsonGen.writeStringField("name", secGroup.name());
+				jsonGen.writeStringField("srcSysType", SRC_SYS_TYPE);
+				jsonGen.writeStringField("resourceType", RESOURCE_TYPES.SecurityGroup.name());
+				jsonGen.writeStringField("id", secGroup.id());
+				jsonGen.writeStringField("lastUpdate", lastUpdate);
+
+				/*
+				 * Details
+				 */
+				jsonGen.writeArrayFieldStart("details");
+				jsonGen.writeString("Region: " + secGroup.regionName());
+				jsonGen.writeString("Resource Group: " + secGroup.resourceGroupName());
+
+				// Tags
+				if (secGroup.tags() != null && !secGroup.tags().isEmpty()) {
+					String tags = "";
+					Iterator<Entry<String, String>> itTags = secGroup.tags().entrySet().iterator();
+
+					while (itTags.hasNext()) {
+						Entry<String, String> tag = itTags.next();
+						tags += tag.getKey() + " --> " + tag.getValue() + ", ";
+					}
+
+					tags = tags.substring(0, tags.length() - 2);
+					jsonGen.writeString("Tags: " + tags);
+				}
+
+				// Default Rules
+				if (secGroup.defaultSecurityRules() != null && !secGroup.defaultSecurityRules().isEmpty()) {
+
+					jsonGen.writeString("Default Rules:");
+
+					Iterator<NetworkSecurityRule> itDefaultRules = secGroup.defaultSecurityRules().values().iterator();
+					while (itDefaultRules.hasNext()) {
+
+						NetworkSecurityRule defaultRule = itDefaultRules.next();
+
+						String defRuleDetails = "Name: " + defaultRule.name() + ", Description: "
+								+ defaultRule.description() + ", " + defaultRule.access() + " "
+								+ defaultRule.direction() + ", Proto: " + defaultRule.protocol().toString()
+								+ ", Src Addr: " + defaultRule.sourceAddressPrefix() + ", Src Port: "
+								+ defaultRule.sourcePortRange() + ", Dst Addr: "
+								+ defaultRule.destinationAddressPrefix() + ", Dst Port: "
+								+ defaultRule.destinationPortRange();
+
+						jsonGen.writeString(defRuleDetails);
+					}
+				}
+
+				// Security Rules
+				if (secGroup.securityRules() != null && !secGroup.securityRules().isEmpty()) {
+
+					jsonGen.writeString("Security Rules:");
+
+					Iterator<NetworkSecurityRule> itSecRules = secGroup.securityRules().values().iterator();
+					while (itSecRules.hasNext()) {
+
+						NetworkSecurityRule secRule = itSecRules.next();
+
+						String defRuleDetails = "Name: " + secRule.name() + ", Description: " + secRule.description()
+								+ ", " + secRule.access() + " " + secRule.direction() + ", Proto: "
+								+ secRule.protocol().toString() + ", Src Addr: " + secRule.sourceAddressPrefix()
+								+ ", Src Port: " + secRule.sourcePortRange() + ", Dst Addr: "
+								+ secRule.destinationAddressPrefix() + ", Dst Port: " + secRule.destinationPortRange();
+
+						jsonGen.writeString(defRuleDetails);
+					}
+				}
+
+				// End the "details" array
+				jsonGen.writeEndArray();
+
+				// End the current VPC node
+				jsonGen.writeEndObject();
+			}
+
+		} catch (Exception ex) {
+			logger.error("Error generating JSON content for list of VPCs", ex);
+		}
+	}
+
 }

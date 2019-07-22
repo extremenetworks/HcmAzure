@@ -34,6 +34,7 @@ public class ResourceRes {
 	private static ObjectMapper jsonMapper = new ObjectMapper();
 	private static final JsonFactory jsonFactory = new JsonFactory();
 
+	private final String rabbitServer = "rabbit-mq";
 	private final static String RABBIT_QUEUE_NAME = "azure.resources";
 	private static Channel rabbitChannel;
 
@@ -49,7 +50,7 @@ public class ResourceRes {
 
 		try {
 			ConnectionFactory factory = new ConnectionFactory();
-			factory.setHost("rabbit-mq");
+			factory.setHost(rabbitServer);
 
 			Connection connection = factory.newConnection();
 			rabbitChannel = connection.createChannel();

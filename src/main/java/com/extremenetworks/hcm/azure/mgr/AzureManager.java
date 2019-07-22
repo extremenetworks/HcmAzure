@@ -16,9 +16,6 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import com.extremenetworks.hcm.azure.tools.NetworkInterfaceJsonSerializer;
 import com.extremenetworks.hcm.azure.tools.NetworkJsonSerializer;
 import com.extremenetworks.hcm.azure.tools.NetworkSecurityGroupJsonSerializer;
@@ -36,6 +33,9 @@ import com.microsoft.azure.management.network.NetworkSecurityGroup;
 import com.microsoft.rest.RestClient;
 import com.microsoft.rest.ServiceResponseBuilder;
 import com.microsoft.rest.serializer.JacksonAdapter;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import okhttp3.OkHttpClient;
 
@@ -501,7 +501,6 @@ public class AzureManager {
 			PagedList<Network> networkList = azureConnection.networks().list();
 
 			allNetworks.addAll(networkList);
-
 			logger.debug("Retrieved all " + allNetworks.size() + " networks from account " + accountName);
 			return allNetworks;
 
