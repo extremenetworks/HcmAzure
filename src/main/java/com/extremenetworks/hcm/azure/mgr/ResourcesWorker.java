@@ -1,14 +1,9 @@
 package com.extremenetworks.hcm.azure.mgr;
 
 import java.io.ByteArrayOutputStream;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import com.extremenetworks.hcm.azure.tools.NetworkInterfaceJsonSerializer;
 import com.extremenetworks.hcm.azure.tools.NetworkJsonSerializer;
@@ -19,6 +14,11 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.google.cloud.Timestamp;
+import com.google.cloud.datastore.Datastore;
+import com.google.cloud.datastore.Entity;
+import com.google.cloud.datastore.Key;
+import com.google.cloud.datastore.StringValue;
 import com.microsoft.azure.AzureEnvironment;
 import com.microsoft.azure.management.compute.VirtualMachine;
 import com.microsoft.azure.management.network.Network;
@@ -26,45 +26,59 @@ import com.microsoft.azure.management.network.NetworkInterface;
 import com.microsoft.azure.management.network.NetworkSecurityGroup;
 import com.rabbitmq.client.Channel;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 public class ResourcesWorker implements Runnable {
 
 	private static final Logger logger = LogManager.getLogger(ResourcesWorker.class);
 	private static ObjectMapper jsonMapper = new ObjectMapper();
 
+	// Extreme Networks GCP tenant id
+	String tenantId;
+	String accountId;
+
 	// Azure config
 	private String appId;
 	private String key;
-	private String tenantId;
+	private String azureTenantId;
 	private String subscription;
 
 	// Rabbit MQ config
 	private String RABBIT_QUEUE_NAME;
 	private Channel rabbitChannel;
 
-	// DB config
-	private final String dbConnString = "jdbc:mysql://hcm-mysql:3306/Resources?useSSL=false";
-	private final String dbUser = "root";
-	private final String dbPassword = "password";
+	// GCP Datastore
+	private Datastore datastore;
+	private final String DS_ENTITY_KIND_AZURE_RESOURCES = "AZURE_Resources";
 
 	// Helpers / Utilities
 	private static final JsonFactory jsonFactory = new JsonFactory();
 	private final SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-	public ResourcesWorker(String appId, String key, String tenantId, String subscription, String RABBIT_QUEUE_NAME,
-			Channel rabbitChannel) {
+	private enum RESOURCE_TYPES {
+		VM, SecurityGroup, Network, NetworkInterface
+	}
 
+	public ResourcesWorker(String tenantId, String accountId, String appId, String key, String azureTenantId,
+			String subscription, String RABBIT_QUEUE_NAME, Channel rabbitChannel, Datastore datastore) {
+
+		// Extreme Networks GCP tenant id
+		this.tenantId = tenantId;
+		this.accountId = accountId;
+
+		// Azure account
 		this.appId = appId;
 		this.key = key;
-		this.tenantId = tenantId;
+		this.azureTenantId = azureTenantId;
 		this.subscription = subscription;
 
 		this.RABBIT_QUEUE_NAME = RABBIT_QUEUE_NAME;
 		this.rabbitChannel = rabbitChannel;
 
-		try {
-			// load and register JDBC driver for MySQL
-			Class.forName("com.mysql.jdbc.Driver");
+		this.datastore = datastore;
 
+		try {
 			SimpleModule azureModule = new SimpleModule("AzureModule");
 			azureModule.addSerializer(NetworkInterface.class, new NetworkInterfaceJsonSerializer());
 			azureModule.addSerializer(VirtualMachine.class, new VirtualMachineJsonSerializer());
@@ -80,11 +94,12 @@ public class ResourcesWorker implements Runnable {
 	@Override
 	public void run() {
 
-		logger.debug("Starting Background worker to import data from Azure for app with ID " + appId);
+		logger.debug("Starting Background worker to import data from Azure using app id " + appId + ", tenant "
+				+ azureTenantId + ", subscription " + subscription + " and key " + key);
 
 		try {
 			AzureManager azureManager = new AzureManager();
-			boolean connected = azureManager.createConnection(appId, tenantId, key, AzureEnvironment.AZURE,
+			boolean connected = azureManager.createConnection(appId, azureTenantId, key, AzureEnvironment.AZURE,
 					subscription);
 
 			if (!connected) {
@@ -93,8 +108,6 @@ public class ResourcesWorker implements Runnable {
 				rabbitChannel.basicPublish("", RABBIT_QUEUE_NAME, null, msg.getBytes("UTF-8"));
 				return;
 			}
-
-			java.sql.Connection dbConn = DriverManager.getConnection(dbConnString, dbUser, dbPassword);
 
 			/*
 			 * Retrieve networks (contain subnets)
@@ -108,8 +121,8 @@ public class ResourcesWorker implements Runnable {
 				return;
 			}
 
-			writeToDb(dbConn, "Network", allNetworks);
-			publishToRabbitMQ("Network", allNetworks);
+			writeToDb(RESOURCE_TYPES.Network, allNetworks);
+			publishToRabbitMQ(RESOURCE_TYPES.Network, allNetworks);
 
 			/*
 			 * Retrieve VMs
@@ -123,8 +136,8 @@ public class ResourcesWorker implements Runnable {
 				return;
 			}
 
-			writeToDb(dbConn, "VM", allVMs);
-			publishToRabbitMQ("VM", allVMs);
+			writeToDb(RESOURCE_TYPES.VM, allVMs);
+			publishToRabbitMQ(RESOURCE_TYPES.VM, allVMs);
 
 			/*
 			 * Retrieve Security Groups
@@ -138,8 +151,8 @@ public class ResourcesWorker implements Runnable {
 				return;
 			}
 
-			writeToDb(dbConn, "SecurityGroup", allSecGroups);
-			publishToRabbitMQ("SecurityGroup", allSecGroups);
+			writeToDb(RESOURCE_TYPES.SecurityGroup, allSecGroups);
+			publishToRabbitMQ(RESOURCE_TYPES.SecurityGroup, allSecGroups);
 
 			/*
 			 * Retrieve Network Interfaces
@@ -153,8 +166,8 @@ public class ResourcesWorker implements Runnable {
 				return;
 			}
 
-			writeToDb(dbConn, "NetworkInterface", allNICs);
-			publishToRabbitMQ("NetworkInterface", allNICs);
+			writeToDb(RESOURCE_TYPES.NetworkInterface, allNICs);
+			publishToRabbitMQ(RESOURCE_TYPES.NetworkInterface, allNICs);
 
 			logger.debug("Finished retrieving all resources from Azure app " + appId);
 
@@ -174,31 +187,37 @@ public class ResourcesWorker implements Runnable {
 	 *                     data and then stored in the DB
 	 * @return
 	 */
-	private boolean writeToDb(java.sql.Connection dbConn, String resourceType, List<Object> data) {
+	private boolean writeToDb(RESOURCE_TYPES resourceType, List<Object> data) {
 
 		try {
-			String sqlInsertStmtSubnets = "INSERT INTO azure (lastUpdated, appId, tenantId, subscription, resourceType, resourceData) "
-					+ "VALUES (NOW(), ?, ?, ?, ?, ?) " + "ON DUPLICATE KEY UPDATE lastUpdated=NOW(), resourceData=?";
+			// The name/ID for the new entity
+			String name = resourceType.name();
 
-			PreparedStatement prepInsertStmtSubnets = dbConn.prepareStatement(sqlInsertStmtSubnets);
+			// The Cloud Datastore key for the new entity
+			Key entityKey = datastore.newKeyFactory().setNamespace(tenantId).setKind(DS_ENTITY_KIND_AZURE_RESOURCES)
+					.newKey(name);
 
-			prepInsertStmtSubnets.setString(1, appId);
-			prepInsertStmtSubnets.setString(2, tenantId);
-			prepInsertStmtSubnets.setString(3, subscription);
-			prepInsertStmtSubnets.setString(4, resourceType);
-			prepInsertStmtSubnets.setString(5, jsonMapper.writeValueAsString(data));
-			prepInsertStmtSubnets.setString(6, jsonMapper.writeValueAsString(data));
+			Entity dataEntity = Entity
+					.newBuilder(entityKey).set("lastUpdated", Timestamp.now()).set("accountId", accountId)
+					.set("resourceType", resourceType.name()).set("resourceData", StringValue
+							.newBuilder(jsonMapper.writeValueAsString(data)).setExcludeFromIndexes(true).build())
+					.build();
 
-			prepInsertStmtSubnets.executeUpdate();
+			logger.debug("About to update / write this entity towards GCP datastore:"
+					+ jsonMapper.writeValueAsString(dataEntity));
+
+			// Saves the entity
+			datastore.put(dataEntity);
+
 			return true;
 
 		} catch (Exception ex) {
-			logger.error("Error trying to store resource data within the DB", ex);
+			logger.error("Error trying to store resource data within GCP Datastore", ex);
 			return false;
 		}
 	}
 
-	private boolean publishToRabbitMQ(String resourceType, List<Object> data) {
+	private boolean publishToRabbitMQ(RESOURCE_TYPES resourceType, List<Object> data) {
 
 		try {
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -217,7 +236,7 @@ public class ResourcesWorker implements Runnable {
 			jsonGen.writeStartObject();
 
 			jsonGen.writeStringField("lastUpdated", dateFormatter.format(now));
-			jsonGen.writeStringField("resourceType", resourceType);
+			jsonGen.writeStringField("resourceType", resourceType.name());
 			jsonGen.writeFieldName("resourceData");
 
 			jsonGen.writeStartArray();
@@ -232,11 +251,7 @@ public class ResourcesWorker implements Runnable {
 			jsonGen.close();
 			outputStream.close();
 
-			logger.debug("Forwarding updated list of " + resourceType + "s to the message queue " + RABBIT_QUEUE_NAME); // +
-																														// ":
-																														// "
-																														// +
-																														// outputStream.toString());
+			logger.debug("Forwarding updated list of " + resourceType + "s to the message queue " + RABBIT_QUEUE_NAME);
 			rabbitChannel.basicPublish("", RABBIT_QUEUE_NAME, null, outputStream.toString().getBytes("UTF-8"));
 
 			return true;

@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
         - name: hcm-azure
-          image: kurts/ng_hcm_azure_mgr
+          image: kurts/hcm_azure
       imagePullSecrets:
         - name: regcred
 ---

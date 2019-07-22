@@ -30,9 +30,8 @@ version="$majorBuildVersion$minorBuildVersion"
 echo -e "${GREEN}$(date +%T.%3N) Building new container image with version $version${NC}"
 
 # Build and push the Docker container
-docker build -q -t kurts/ng_hcm_azure_mgr:$version .
-docker login -ukurts -pXS7Z8pEy
-docker push kurts/ng_hcm_azure_mgr:$version
+docker build -q -t kurts/hcm_azure:$version .
+docker push kurts/hcm_azure:$version
 
 # Store the new build version in the file
 echo $version > build.version
@@ -40,12 +39,14 @@ echo $version > build.version
 # Update the container to the newest image on the deployment on GKE
 # deployment name, then container name and finally new image with version tag
 echo -e "${GREEN}$(date +%T.%3N) Updating GKE container image to version $version${NC}"
-kubectl set image deployment/hcm-azure hcm-azure=kurts/ng_hcm_azure_mgr:$version
+kubectl set image deployment/hcm-azure hcm-azure=kurts/hcm_azure:$version
 
 echo -e "${GREEN}$(date +%T.%3N) Overall script execution time: $(($SECONDS / 60)) minutes and $(($SECONDS % 60)) seconds${NC}"
 
-# Wait for 15 seconds so GKE can deploy the new container using the new image
-sleep 15
+# Wait for Kubernetes to deploy the new image
+sleepTime=15
+echo -e "$(date +%T.%3N) ${GREEN}Sleeping for $sleepTime seconds before attaching to container logs${NC}"
+sleep $sleepTime
 
 # Attach to the new container's log output
 kubectl logs -f $(kubectl get pod -l app=hcm-azure -o jsonpath="{.items[0].metadata.name}") -c hcm-azure
