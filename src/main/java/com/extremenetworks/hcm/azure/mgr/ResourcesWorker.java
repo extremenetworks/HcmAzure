@@ -20,6 +20,7 @@ import com.google.cloud.Timestamp;
 import com.google.cloud.datastore.Datastore;
 import com.google.cloud.datastore.Entity;
 import com.google.cloud.datastore.Key;
+import com.google.cloud.datastore.PathElement;
 import com.google.cloud.datastore.StringValue;
 import com.microsoft.azure.AzureEnvironment;
 import com.microsoft.azure.management.compute.VirtualMachine;
@@ -43,10 +44,7 @@ public class ResourcesWorker implements Runnable {
 	String accountId;
 
 	// Azure config
-	private String appId;
-	private String key;
-	private String azureTenantId;
-	private String subscription;
+	private AccountConfig accountConfig;
 
 	// Rabbit MQ config
 	private String RABBIT_QUEUE_NAME;
@@ -56,6 +54,7 @@ public class ResourcesWorker implements Runnable {
 	private Datastore datastore;
 	private final String DS_ENTITY_KIND_AZURE_RESOURCES = "AZURE_Resources";
 	private final String SRC_SYS_TYPE = "AZURE";
+	private final String DS_ENTITY_KIND_SRC_SYS_AZURE = "SourceSystemAzure";
 
 	// Helpers / Utilities
 	private static final JsonFactory jsonFactory = new JsonFactory();
@@ -65,18 +64,15 @@ public class ResourcesWorker implements Runnable {
 		VM, SecurityGroup, Network, NetworkInterface
 	}
 
-	public ResourcesWorker(String tenantId, String accountId, String appId, String key, String azureTenantId,
-			String subscription, String RABBIT_QUEUE_NAME, Channel rabbitChannel, Datastore datastore) {
+	public ResourcesWorker(String tenantId, String accountId, AccountConfig accountConfig, String RABBIT_QUEUE_NAME,
+			Channel rabbitChannel, Datastore datastore) {
 
 		// Extreme Networks GCP tenant id
 		this.tenantId = tenantId;
 		this.accountId = accountId;
 
 		// Azure account
-		this.appId = appId;
-		this.key = key;
-		this.azureTenantId = azureTenantId;
-		this.subscription = subscription;
+		this.accountConfig = accountConfig;
 
 		this.RABBIT_QUEUE_NAME = RABBIT_QUEUE_NAME;
 		this.rabbitChannel = rabbitChannel;
@@ -99,13 +95,14 @@ public class ResourcesWorker implements Runnable {
 	@Override
 	public void run() {
 
-		logger.debug("Starting Background worker to import data from Azure using app id " + appId + ", tenant "
-				+ azureTenantId + ", subscription " + subscription + " and key " + key);
+		logger.debug("Starting Background worker to import data from Azure account: " + accountConfig.toString());
 
 		try {
+			String appId = accountConfig.getAppId();
+
 			AzureManager azureManager = new AzureManager();
-			boolean connected = azureManager.createConnection(appId, azureTenantId, key, AzureEnvironment.AZURE,
-					subscription);
+			boolean connected = azureManager.createConnection(appId, accountConfig.getAzureTenantId(),
+					accountConfig.getKey(), AzureEnvironment.AZURE, accountConfig.getSubscription());
 
 			if (!connected) {
 				String msg = "Won't be able to retrieve any data from Azure since no authentication/authorization/connection could be established";
@@ -199,11 +196,11 @@ public class ResourcesWorker implements Runnable {
 			String name = resourceType.name();
 
 			// The Cloud Datastore key for the new entity
-			Key entityKey = datastore.newKeyFactory().setNamespace(tenantId).setKind(DS_ENTITY_KIND_AZURE_RESOURCES)
-					.newKey(name);
+			Key entityKey = datastore.newKeyFactory().setNamespace(accountConfig.getTenantId())
+					.setKind(DS_ENTITY_KIND_AZURE_RESOURCES)
+					.addAncestor(PathElement.of(DS_ENTITY_KIND_SRC_SYS_AZURE, accountId)).newKey(name);
 
-			Entity dataEntity = Entity
-					.newBuilder(entityKey).set("lastUpdated", Timestamp.now()).set("accountId", accountId)
+			Entity dataEntity = Entity.newBuilder(entityKey).set("lastUpdated", Timestamp.now())
 					.set("resourceType", resourceType.name()).set("resourceData", StringValue
 							.newBuilder(jsonMapper.writeValueAsString(data)).setExcludeFromIndexes(true).build())
 					.build();
@@ -226,7 +223,6 @@ public class ResourcesWorker implements Runnable {
 
 		try {
 			Date now = new Date();
-			String lastUpdate = dateFormatter.format(now);
 
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 			JsonGenerator jsonGen = jsonFactory.createGenerator(outputStream, JsonEncoding.UTF8);
@@ -235,7 +231,7 @@ public class ResourcesWorker implements Runnable {
 
 			jsonGen.writeStringField("dataType", "resources");
 			jsonGen.writeStringField("sourceSystemType", "azure");
-			jsonGen.writeStringField("sourceSystemProjectId", appId);
+			// jsonGen.writeStringField("sourceSystemProjectId", appId);
 
 			jsonGen.writeArrayFieldStart("data");
 
